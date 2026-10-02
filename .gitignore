@@ -1,0 +1,15 @@
+# Ambiente virtual
+.venv/
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Variáveis de ambiente (senhas, chaves)
+.env
+
+# Cache de ferramentas
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/n

@@ -1,0 +1,5 @@
+[tool.ruff.lint]
+# Os arquivos montados do Windows dentro do container aparecem como
+# executáveis, o que gera falsos alarmes da regra EXE002. No repositório
+# eles não são executáveis.
+ignore = ["EXE002"]

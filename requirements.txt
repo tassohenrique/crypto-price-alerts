@@ -1,0 +1,6 @@
+fastapi[standard]>=0.141
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+pydantic-settings>=2.0
+alembic>=1.13
+httpx>=0.27
