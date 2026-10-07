@@ -30,6 +30,8 @@ class Alert(Base):
     target_price: Mapped[Decimal] = mapped_column(Numeric(30, 12))
     is_active: Mapped[bool] = mapped_column(default=True, server_default="true")
     triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    triggered_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -40,6 +40,7 @@ class AlertService:
             if is_triggered(alert.direction, alert.target_price, price):
                 alert.is_active = False
                 alert.triggered_at = now
+                alert.triggered_price = price
                 triggered.append(TriggeredAlert(alert=alert, price=price))
 
         self.alerts.flush()

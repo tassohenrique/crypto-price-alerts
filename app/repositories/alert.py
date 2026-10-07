@@ -30,6 +30,18 @@ class AlertRepository:
         )
         return self.db.scalars(query).all()
 
+    def list_pending_notifications(self) -> Sequence[Alert]:
+        """Alertas que já dispararam, mas cujo aviso ainda não foi enviado."""
+        query = (
+            select(Alert)
+            .join(Alert.coin)
+            .options(contains_eager(Alert.coin))
+            .where(Alert.triggered_at.is_not(None), Alert.notified_at.is_(None))
+            .order_by(Alert.triggered_at, Alert.id)
+        )
+        return self.db.scalars(query).all()
+    
+
     def flush(self) -> None:
         """Envia as alterações pendentes ao banco, sem confirmar a transação."""
         self.db.flush()
