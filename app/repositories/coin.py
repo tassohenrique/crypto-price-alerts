@@ -20,3 +20,6 @@ class CoinRepository:
         self.db.add(coin)
         self.db.flush()
         return coin
+
+    def get(self, coin_id: int) -> Coin | None:
+        return self.db.get(Coin, coin_id)

@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 import pytest
@@ -6,7 +7,7 @@ from sqlalchemy import func, select
 from app.clients.coingecko import CoinGeckoError
 from app.clients.telegram import TelegramError
 from app.models import AlertDirection, PriceSnapshot
-from app.worker import run_cycle, run_once
+from app.worker import configure_logging, run_cycle, run_once
 from tests.conftest import TestingSessionLocal
 
 
@@ -143,3 +144,10 @@ def test_run_once_survives_unexpected_error(monkeypatch, telegram):
     monkeypatch.setattr("app.worker.SessionLocal", TestingSessionLocal)
 
     run_once(FakeCoinGecko(), telegram)
+
+
+def test_logging_does_not_record_request_urls():
+    """A URL do Telegram contém o token do bot e não pode ir para o log."""
+    configure_logging()
+
+    assert not logging.getLogger("httpx").isEnabledFor(logging.INFO)

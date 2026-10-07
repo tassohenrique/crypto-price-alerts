@@ -4,6 +4,7 @@ import pytest
 
 from app.models import Alert, AlertDirection
 from app.repositories.alert import AlertRepository
+from app.repositories.coin import CoinRepository
 from app.services.alert import AlertService
 
 ABOVE = AlertDirection.ABOVE
@@ -12,7 +13,7 @@ BELOW = AlertDirection.BELOW
 
 @pytest.fixture
 def service(db_session):
-    return AlertService(AlertRepository(db_session))
+    return AlertService(AlertRepository(db_session), CoinRepository(db_session))
 
 
 def test_above_alert_triggers_when_price_reaches_target(service, bitcoin, make_alert):

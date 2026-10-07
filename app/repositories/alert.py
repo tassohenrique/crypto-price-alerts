@@ -44,3 +44,17 @@ class AlertRepository:
     def flush(self) -> None:
         """Envia as alterações pendentes ao banco, sem confirmar a transação."""
         self.db.flush()
+
+    def get(self, alert_id: int) -> Alert | None:
+        return self.db.get(Alert, alert_id)
+
+    def list_all(self, active: bool | None = None) -> Sequence[Alert]:
+        """Todos os alertas, do mais recente para o mais antigo."""
+        query = select(Alert).join(Alert.coin).options(contains_eager(Alert.coin))
+        if active is not None:
+            query = query.where(Alert.is_active.is_(active))
+        return self.db.scalars(query.order_by(Alert.id.desc())).all()
+
+    def delete(self, alert: Alert) -> None:
+        self.db.delete(alert)
+        self.db.flush()

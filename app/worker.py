@@ -64,7 +64,8 @@ def collect_prices(
             for coingecko_id, price in prices.items()
         ]
     )
-    triggered = AlertService(AlertRepository(db)).check_alerts(prices)
+    alert_service = AlertService(AlertRepository(db), CoinRepository(db))
+    triggered = alert_service.check_alerts(prices)
     db.commit()
 
     result.prices_saved = len(prices)
@@ -110,11 +111,18 @@ def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> None:
     )
 
 
-def main() -> None:
+def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # O httpx registra a URL de cada requisição em nível INFO, e a URL do
+    # Telegram contém o token do bot. Do httpx, só avisos e erros vão para o log.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def main() -> None:
+    configure_logging()
     stop = threading.Event()
 
     def request_stop(signum: int, _frame: object) -> None:
