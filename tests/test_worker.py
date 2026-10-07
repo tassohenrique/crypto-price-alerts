@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from app.clients.coingecko import CoinGeckoError
 from app.clients.telegram import TelegramError
 from app.models import AlertDirection, PriceSnapshot
-from app.worker import run_cycle
+from app.worker import run_cycle, run_once
+from tests.conftest import TestingSessionLocal
 
 
 class FakeCoinGecko:
@@ -19,7 +20,9 @@ class FakeCoinGecko:
         self.calls.append(list(coingecko_ids))
         if self.error is not None:
             raise self.error
-        return {key: value for key, value in self.prices.items() if key in coingecko_ids}
+        return {
+            key: value for key, value in self.prices.items() if key in coingecko_ids
+        }
 
 
 class FakeTelegram:
@@ -51,7 +54,9 @@ def test_cycle_saves_prices_for_all_coins(db_session, bitcoin, ethereum, telegra
     assert count_snapshots(db_session) == 2
 
 
-def test_cycle_triggers_alert_and_sends_message(db_session, bitcoin, make_alert, telegram):
+def test_cycle_triggers_alert_and_sends_message(
+    db_session, bitcoin, make_alert, telegram
+):
     alert = make_alert(bitcoin, AlertDirection.ABOVE, "400000")
     coingecko = FakeCoinGecko({"bitcoin": Decimal(450000)})
 
@@ -86,14 +91,18 @@ def test_failed_notification_is_retried_next_cycle(db_session, bitcoin, make_ale
     assert alert.notified_at is None
 
     telegram.fail = False
-    second = run_cycle(db_session, FakeCoinGecko({"bitcoin": Decimal(380000)}), telegram)
+    second = run_cycle(
+        db_session, FakeCoinGecko({"bitcoin": Decimal(380000)}), telegram
+    )
 
     assert second.notifications_sent == 1
     assert "R$ 450.000,00" in telegram.messages[0]
     assert alert.notified_at is not None
 
 
-def test_coingecko_failure_saves_nothing_and_does_not_raise(db_session, bitcoin, telegram):
+def test_coingecko_failure_saves_nothing_and_does_not_raise(
+    db_session, bitcoin, telegram
+):
     coingecko = FakeCoinGecko(error=CoinGeckoError("falha simulada"))
 
     result = run_cycle(db_session, coingecko, telegram)
@@ -102,13 +111,17 @@ def test_coingecko_failure_saves_nothing_and_does_not_raise(db_session, bitcoin,
     assert count_snapshots(db_session) == 0
 
 
-def test_coingecko_failure_still_sends_pending_notifications(db_session, bitcoin, make_alert):
+def test_coingecko_failure_still_sends_pending_notifications(
+    db_session, bitcoin, make_alert
+):
     make_alert(bitcoin, AlertDirection.ABOVE, "400000")
     telegram = FakeTelegram(fail=True)
     run_cycle(db_session, FakeCoinGecko({"bitcoin": Decimal(450000)}), telegram)
 
     telegram.fail = False
-    result = run_cycle(db_session, FakeCoinGecko(error=CoinGeckoError("fora do ar")), telegram)
+    result = run_cycle(
+        db_session, FakeCoinGecko(error=CoinGeckoError("fora do ar")), telegram
+    )
 
     assert result.notifications_sent == 1
     assert len(telegram.messages) == 1
@@ -120,3 +133,13 @@ def test_cycle_without_coins_does_not_call_coingecko(db_session, telegram):
     run_cycle(db_session, coingecko, telegram)
 
     assert coingecko.calls == []
+
+
+def test_run_once_survives_unexpected_error(monkeypatch, telegram):
+    def broken_cycle(*args):
+        raise RuntimeError("erro que ninguém previu")
+
+    monkeypatch.setattr("app.worker.run_cycle", broken_cycle)
+    monkeypatch.setattr("app.worker.SessionLocal", TestingSessionLocal)
+
+    run_once(FakeCoinGecko(), telegram)

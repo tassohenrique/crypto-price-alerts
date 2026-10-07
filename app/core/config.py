@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str
     telegram_chat_id: str
+    poll_interval_seconds: int = 300
 
 
 settings = Settings()

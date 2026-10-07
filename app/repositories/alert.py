@@ -40,7 +40,6 @@ class AlertRepository:
             .order_by(Alert.triggered_at, Alert.id)
         )
         return self.db.scalars(query).all()
-    
 
     def flush(self) -> None:
         """Envia as alterações pendentes ao banco, sem confirmar a transação."""
