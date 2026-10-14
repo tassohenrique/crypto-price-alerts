@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from app.api.routers import alerts, health
+from app.api.routers import alerts, coins, health
 from app.core.exceptions import AppError
 
 app = FastAPI(
@@ -24,3 +24,4 @@ def root() -> RedirectResponse:
 
 app.include_router(health.router)
 app.include_router(alerts.router)
+app.include_router(coins.router)

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.clients.coingecko import (
     CoinGeckoClient,
     CoinGeckoError,
-    CoinGeckoRateLimitError,
     create_coingecko_client,
 )
 from app.clients.telegram import TelegramClient, TelegramError, create_telegram_client
@@ -53,8 +52,10 @@ def collect_prices(
 
     try:
         prices = coingecko.get_prices([coin.coingecko_id for coin in coins])
-    except (CoinGeckoRateLimitError, CoinGeckoError):
-        logger.warning("Falha ao buscar preços na CoinGecko; ciclo de preços pulado.")
+    except CoinGeckoError as exc:
+        logger.warning(
+            "Falha ao buscar preços na CoinGecko (%s); ciclo de preços pulado.", exc
+        )
         return
 
     coins_by_id = {coin.coingecko_id: coin for coin in coins}

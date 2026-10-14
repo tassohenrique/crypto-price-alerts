@@ -151,3 +151,12 @@ def test_logging_does_not_record_request_urls():
     configure_logging()
 
     assert not logging.getLogger("httpx").isEnabledFor(logging.INFO)
+
+
+def test_coingecko_failure_is_logged_with_reason(db_session, bitcoin, telegram, caplog):
+    coingecko = FakeCoinGecko(error=CoinGeckoError("CoinGecko returned status 401"))
+
+    with caplog.at_level(logging.WARNING, logger="app.worker"):
+        run_cycle(db_session, coingecko, telegram)
+
+    assert "status 401" in caplog.text

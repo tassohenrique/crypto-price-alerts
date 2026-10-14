@@ -1,5 +1,7 @@
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Self
+from typing import Any, Self
+from urllib.parse import quote
 
 import httpx
 
@@ -12,6 +14,17 @@ class CoinGeckoError(Exception):
 
 class CoinGeckoRateLimitError(CoinGeckoError):
     """A CoinGecko recusou a requisição por excesso de chamadas (HTTP 429)."""
+
+
+class CoinGeckoNotFoundError(CoinGeckoError):
+    """A CoinGecko não reconhece o recurso pedido (HTTP 404)."""
+
+
+@dataclass(frozen=True)
+class CoinInfo:
+    coingecko_id: str
+    symbol: str
+    name: str
 
 
 class CoinGeckoClient:
@@ -29,6 +42,24 @@ class CoinGeckoClient:
             transport=transport,
         )
 
+    def _get(self, path: str, params: dict[str, str]) -> Any:
+        """Faz um GET e converte qualquer falha num erro da CoinGecko."""
+        try:
+            response = self.http.get(path, params=params)
+        except httpx.TimeoutException as exc:
+            raise CoinGeckoError("CoinGecko did not respond in time") from exc
+        except httpx.HTTPError as exc:
+            raise CoinGeckoError(f"Could not reach CoinGecko: {exc}") from exc
+
+        if response.status_code == 404:
+            raise CoinGeckoNotFoundError(f"CoinGecko has no resource at {path}")
+        if response.status_code == 429:
+            raise CoinGeckoRateLimitError("CoinGecko rate limit exceeded")
+        if response.is_error:
+            raise CoinGeckoError(f"CoinGecko returned status {response.status_code}")
+
+        return response.json(parse_float=Decimal)
+
     def get_prices(
         self, coin_ids: list[str], currency: str = "brl"
     ) -> dict[str, Decimal]:
@@ -39,25 +70,10 @@ class CoinGeckoClient:
         if not coin_ids:
             return {}
 
-        params = {
-            "ids": ",".join(coin_ids),
-            "vs_currencies": currency,
-            "precision": "full",
-        }
-
-        try:
-            response = self.http.get("/simple/price", params=params)
-        except httpx.TimeoutException as exc:
-            raise CoinGeckoError("CoinGecko did not respond in time") from exc
-        except httpx.HTTPError as exc:
-            raise CoinGeckoError(f"Could not reach CoinGecko: {exc}") from exc
-
-        if response.status_code == 429:
-            raise CoinGeckoRateLimitError("CoinGecko rate limit exceeded")
-        if response.is_error:
-            raise CoinGeckoError(f"CoinGecko returned status {response.status_code}")
-
-        data = response.json(parse_float=Decimal)
+        data = self._get(
+            "/simple/price",
+            {"ids": ",".join(coin_ids), "vs_currencies": currency, "precision": "full"},
+        )
 
         prices: dict[str, Decimal] = {}
         for coin_id in coin_ids:
@@ -65,6 +81,23 @@ class CoinGeckoClient:
             if value is not None:
                 prices[coin_id] = Decimal(value)
         return prices
+
+    def get_coin(self, coingecko_id: str) -> CoinInfo:
+        """Busca o símbolo e o nome de uma moeda pelo id da CoinGecko."""
+        data = self._get(
+            f"/coins/{quote(coingecko_id, safe='')}",
+            {
+                "localization": "false",
+                "tickers": "false",
+                "market_data": "false",
+                "community_data": "false",
+                "developer_data": "false",
+                "sparkline": "false",
+            },
+        )
+        return CoinInfo(
+            coingecko_id=data["id"], symbol=data["symbol"].upper(), name=data["name"]
+        )
 
     def close(self) -> None:
         self.http.close()

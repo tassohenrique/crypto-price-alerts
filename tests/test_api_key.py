@@ -6,6 +6,8 @@ PROTECTED_ENDPOINTS = [
     ("get", "/alerts/1"),
     ("post", "/alerts/1/rearm"),
     ("delete", "/alerts/1"),
+    ("get", "/coins"),
+    ("post", "/coins"),
 ]
 
 

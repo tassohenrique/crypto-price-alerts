@@ -6,7 +6,9 @@ import pytest
 from app.clients.coingecko import (
     CoinGeckoClient,
     CoinGeckoError,
+    CoinGeckoNotFoundError,
     CoinGeckoRateLimitError,
+    CoinInfo,
 )
 
 BASE_URL = "https://api.test/api/v3"
@@ -84,3 +86,24 @@ def test_timeout_raises_coingecko_error():
 
     with pytest.raises(CoinGeckoError):
         make_client(handler).get_prices(["bitcoin"])
+
+
+def test_get_coin_returns_symbol_and_name():
+    def handler(request):
+        assert request.url.path == "/api/v3/coins/solana"
+        assert request.url.params["market_data"] == "false"
+        return httpx.Response(
+            200, json={"id": "solana", "symbol": "sol", "name": "Solana", "extra": 1}
+        )
+
+    info = make_client(handler).get_coin("solana")
+
+    assert info == CoinInfo(coingecko_id="solana", symbol="SOL", name="Solana")
+
+
+def test_get_coin_unknown_raises_not_found():
+    def handler(request):
+        return httpx.Response(404, json={"error": "coin not found"})
+
+    with pytest.raises(CoinGeckoNotFoundError):
+        make_client(handler).get_coin("moeda-que-nao-existe")

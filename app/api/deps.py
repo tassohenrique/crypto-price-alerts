@@ -1,9 +1,11 @@
 import secrets
+from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Security
 from fastapi.security import APIKeyHeader
 
+from app.clients.coingecko import CoinGeckoClient, create_coingecko_client
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedError
 
@@ -16,3 +18,9 @@ def require_api_key(api_key: Annotated[str | None, Security(api_key_header)]) ->
         api_key.encode(), settings.api_key.encode()
     ):
         raise UnauthorizedError("Chave de API inválida ou ausente.")
+
+
+def get_coingecko_client() -> Iterator[CoinGeckoClient]:
+    """Entrega um cliente da CoinGecko e fecha as conexões ao fim da requisição."""
+    with create_coingecko_client() as client:
+        yield client

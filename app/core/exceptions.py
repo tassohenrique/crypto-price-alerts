@@ -22,3 +22,11 @@ class UnauthorizedError(AppError):
 
 class ForbiddenError(AppError):
     status_code = 403
+
+
+class UnprocessableError(AppError):
+    status_code = 422
+
+
+class BadGatewayError(AppError):
+    status_code = 502
