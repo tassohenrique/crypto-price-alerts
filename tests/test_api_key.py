@@ -8,6 +8,7 @@ PROTECTED_ENDPOINTS = [
     ("delete", "/alerts/1"),
     ("get", "/coins"),
     ("post", "/coins"),
+    ("get", "/coins/1/prices"),
 ]
 
 
