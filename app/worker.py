@@ -1,3 +1,4 @@
+import argparse
 import logging
 import signal
 import threading
@@ -92,15 +93,20 @@ def send_pending_notifications(
         result.notifications_sent += 1
 
 
-def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> None:
-    """Roda um ciclo numa sessão própria. Nenhum erro escapa daqui."""
+def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> bool:
+    """Roda um ciclo numa sessão própria. Nenhum erro escapa daqui.
+
+    Devolve False se o ciclo quebrou com um erro inesperado. Falhas previstas
+    (CoinGecko fora do ar, Telegram recusando) já são tratadas no ciclo e não
+    contam como erro: o ciclo seguinte tenta de novo.
+    """
     with SessionLocal() as db:
         try:
             result = run_cycle(db, coingecko, telegram)
         except Exception:
             db.rollback()
             logger.exception("Erro inesperado no ciclo; o worker continua no próximo.")
-            return
+            return False
 
     logger.info(
         "Ciclo concluído: %d preços, %d alertas disparados, %d avisos enviados, "
@@ -110,6 +116,7 @@ def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> None:
         result.notifications_sent,
         result.notifications_failed,
     )
+    return True
 
 
 def configure_logging() -> None:
@@ -122,8 +129,28 @@ def configure_logging() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Worker do Crypto Price Alerts.")
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Roda um único ciclo e sai (para agendadores como o GitHub Actions).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Ponto de entrada. Devolve o código de saída do processo."""
+    args = parse_args(argv)
     configure_logging()
+
+    if args.once:
+        # Um ciclo e fim: quem agenda é o GitHub Actions. O código de saída 1
+        # deixa a execução vermelha no GitHub quando o ciclo quebra.
+        telegram = create_telegram_client()
+        with create_coingecko_client() as coingecko:
+            return 0 if run_once(coingecko, telegram) else 1
+
     stop = threading.Event()
 
     def request_stop(signum: int, _frame: object) -> None:
@@ -143,7 +170,8 @@ def main() -> None:
             stop.wait(interval)
 
     logger.info("Worker encerrado.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

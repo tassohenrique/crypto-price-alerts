@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from app.clients.coingecko import CoinGeckoError
 from app.clients.telegram import TelegramError
 from app.models import AlertDirection, PriceSnapshot
-from app.worker import configure_logging, run_cycle, run_once
+from app.worker import configure_logging, main, run_cycle, run_once
 from tests.conftest import TestingSessionLocal
 
 
@@ -143,7 +143,47 @@ def test_run_once_survives_unexpected_error(monkeypatch, telegram):
     monkeypatch.setattr("app.worker.run_cycle", broken_cycle)
     monkeypatch.setattr("app.worker.SessionLocal", TestingSessionLocal)
 
-    run_once(FakeCoinGecko(), telegram)
+    assert run_once(FakeCoinGecko(), telegram) is False
+
+
+def test_run_once_reports_success(monkeypatch, db_session, telegram):
+    monkeypatch.setattr("app.worker.SessionLocal", TestingSessionLocal)
+
+    assert run_once(FakeCoinGecko(), telegram) is True
+
+
+class FakeCoinGeckoContext(FakeCoinGecko):
+    """Como o cliente real, pode ser usado com `with`."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return None
+
+
+@pytest.fixture
+def fake_clients(monkeypatch, telegram):
+    monkeypatch.setattr("app.worker.create_telegram_client", lambda: telegram)
+    monkeypatch.setattr(
+        "app.worker.create_coingecko_client", lambda: FakeCoinGeckoContext()
+    )
+
+
+@pytest.mark.parametrize(("cycle_ok", "exit_code"), [(True, 0), (False, 1)])
+def test_once_runs_a_single_cycle_and_exits(
+    monkeypatch, fake_clients, cycle_ok, exit_code
+):
+    calls = []
+
+    def fake_run_once(coingecko, telegram):
+        calls.append(coingecko)
+        return cycle_ok
+
+    monkeypatch.setattr("app.worker.run_once", fake_run_once)
+
+    assert main(["--once"]) == exit_code
+    assert len(calls) == 1
 
 
 def test_logging_does_not_record_request_urls():
