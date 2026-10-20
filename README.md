@@ -3,8 +3,6 @@
 [![CI](https://github.com/tassohenrique/crypto-price-alerts/actions/workflows/ci.yml/badge.svg)](https://github.com/tassohenrique/crypto-price-alerts/actions/workflows/ci.yml)
 ![Cobertura](https://img.shields.io/badge/cobertura-95%25-brightgreen)
 
-(aqui continua o resto do README, como já estava)
-
 ![Python](https://img.shields.io/badge/python-3.14-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)
@@ -180,6 +178,19 @@ python -m app.worker           # worker, em outro terminal
 ```
 
 Fora do Docker, as variáveis `DATABASE_URL` e `TEST_DATABASE_URL` do `.env` apontam para `localhost:5433`.
+
+### Imagem de produção
+
+O `Dockerfile` gera uma imagem enxuta (só as dependências de produção, sem testes, rodando sem root). A mesma imagem serve aos três processos; as migrations rodam primeiro:
+
+```bash
+docker build -t crypto-price-alerts .
+docker run --rm --env-file .env crypto-price-alerts alembic upgrade head   # 1. migrations
+docker run -d --env-file .env -p 8000:8000 crypto-price-alerts             # 2. API
+docker run -d --env-file .env crypto-price-alerts python -m app.worker     # 3. worker
+```
+
+O `DATABASE_URL` precisa apontar para um banco que o container alcance (em produção, o banco gerenciado; o `localhost:5433` do `.env` de desenvolvimento não funciona de dentro do container). A API escuta na porta da variável `PORT` (8000 se não for definida). O CI constrói essa imagem a cada push e confere que as migrations rodam e que o `/health` responde.
 
 ## Testes
 
