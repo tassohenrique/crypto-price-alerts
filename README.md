@@ -3,8 +3,6 @@
 [![CI](https://github.com/tassohenrique/crypto-price-alerts/actions/workflows/ci.yml/badge.svg)](https://github.com/tassohenrique/crypto-price-alerts/actions/workflows/ci.yml)
 ![Cobertura](https://img.shields.io/badge/cobertura-95%25-brightgreen)
 
-(aqui continua o resto do README, como já estava)
-
 ![Python](https://img.shields.io/badge/python-3.14-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)
