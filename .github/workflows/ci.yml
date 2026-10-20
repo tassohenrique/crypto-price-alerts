@@ -78,3 +78,73 @@ jobs:
 
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing
+
+  docker:
+    name: Production image (smoke test)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: crypto
+          POSTGRES_PASSWORD: crypto_ci_password
+          POSTGRES_DB: crypto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crypto -d crypto"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t crypto-price-alerts:ci .
+
+      # Arquivo de variáveis falsas, passado com --env-file para os containers.
+      # --network host: o container enxerga o Postgres do job em localhost:5432.
+      - name: Write fake environment
+        run: |
+          cat > ci.env <<'EOF'
+          DATABASE_URL=postgresql+psycopg://crypto:crypto_ci_password@localhost:5432/crypto
+          COINGECKO_API_KEY=ci-fake-coingecko-key
+          TELEGRAM_BOT_TOKEN=ci-fake-telegram-token
+          TELEGRAM_CHAT_ID=0
+          API_KEY=ci-fake-api-key
+          EOF
+
+      - name: Image has no dev tools nor tests
+        run: |
+          docker run --rm crypto-price-alerts:ci sh -c '! command -v pytest && ! command -v ruff && [ ! -d tests ]'
+
+      - name: Image runs as non-root
+        run: |
+          test "$(docker run --rm crypto-price-alerts:ci id -u)" != "0"
+
+      - name: Migrations run inside the image
+        run: |
+          docker run --rm --network host --env-file ci.env \
+            crypto-price-alerts:ci alembic upgrade head
+
+      - name: Worker module imports
+        run: |
+          docker run --rm --network host --env-file ci.env \
+            crypto-price-alerts:ci python -c "import app.worker"
+
+      - name: API answers /health
+        run: |
+          docker run -d --name api --network host --env-file ci.env -e PORT=8000 \
+            crypto-price-alerts:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health; then
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become healthy"
+          docker logs api
+          exit 1
