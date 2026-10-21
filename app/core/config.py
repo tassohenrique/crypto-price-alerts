@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +15,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     telegram_chat_id: str
     poll_interval_seconds: int = 300
+    # "text" para ler no terminal; "json" em produção, para filtrar por campo.
+    log_format: Literal["text", "json"] = "text"
     api_key: str
 
 

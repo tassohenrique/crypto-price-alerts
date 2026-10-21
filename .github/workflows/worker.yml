@@ -66,3 +66,4 @@ jobs:
           # O worker não usa a chave da API, mas a configuração exige a variável.
           # Valor falso: a chave real não precisa existir em mais um lugar.
           API_KEY: not-used-by-the-worker
+          LOG_FORMAT: json

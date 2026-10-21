@@ -186,6 +186,26 @@ def test_once_runs_a_single_cycle_and_exits(
     assert len(calls) == 1
 
 
+def test_cycle_summary_has_fields_for_json_logs(
+    monkeypatch, db_session, bitcoin, telegram, caplog
+):
+    # O run_once abre a própria sessão: a moeda precisa estar gravada de fato.
+    db_session.commit()
+    monkeypatch.setattr("app.worker.SessionLocal", TestingSessionLocal)
+    coingecko = FakeCoinGecko({"bitcoin": Decimal(450000)})
+
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        run_once(coingecko, telegram)
+
+    summary = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("Ciclo concluído")
+    )
+    assert summary.prices_saved == 1
+    assert summary.notifications_failed == 0
+
+
 def test_logging_does_not_record_request_urls():
     """A URL do Telegram contém o token do bot e não pode ir para o log."""
     configure_logging()

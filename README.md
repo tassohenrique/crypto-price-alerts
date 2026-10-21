@@ -140,6 +140,7 @@ No `.env`, troque a senha do banco (nas três variáveis em que ela aparece) e p
 | `TELEGRAM_CHAT_ID` | Mande uma mensagem para o seu bot e abra `https://api.telegram.org/bot<TOKEN>/getUpdates`; o id está em `message.chat.id` |
 | `API_KEY` | Qualquer valor secreto, por exemplo `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `POLL_INTERVAL_SECONDS` | Opcional. Intervalo entre os ciclos do worker; o padrão é 300 |
+| `LOG_FORMAT` | Opcional. `text` (padrão, para ler no terminal) ou `json` (uma linha JSON por log, usado em produção) |
 
 **2. Suba os serviços e crie as tabelas**
 
