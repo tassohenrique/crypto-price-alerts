@@ -1,0 +1,21 @@
+name: Freeze (temporário)
+on:
+  push:
+    branches: [tmp/freeze]
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        set: [prod, dev]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: |
+          python -m venv /tmp/v
+          if [ "${{ matrix.set }}" = prod ]; then f=requirements.txt; else f=requirements-dev.txt; fi
+          /tmp/v/bin/pip install -q -r $f
+          /tmp/v/bin/python --version
+          echo "::notice title=${{ matrix.set }}::$(/tmp/v/bin/python --version) $(/tmp/v/bin/pip freeze --all --exclude pip | tr '\n' ' ')"
