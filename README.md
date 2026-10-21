@@ -4,7 +4,7 @@
 ![Cobertura](https://img.shields.io/badge/cobertura-95%25-brightgreen)
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.159-009688)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)
 
 Monitor de preços de criptomoedas com alertas no Telegram. Um worker consulta os preços na CoinGecko em intervalos regulares, guarda o histórico e, quando uma moeda cruza o preço-alvo de um alerta, envia uma mensagem no Telegram. Os alertas são gerenciados por uma API REST.
@@ -27,7 +27,7 @@ Seu alerta: acima de R$ 600.000,00.
 ## Tecnologias
 
 - **Python 3.14** e **FastAPI**
-- **PostgreSQL 17**, **SQLAlchemy 2.0** e **Alembic** (migrations)
+- **PostgreSQL 17**, **SQLAlchemy 2.1** e **Alembic** (migrations)
 - **httpx** (clientes da CoinGecko e do Telegram) e **Pydantic Settings** (configuração)
 - **pytest** e **pytest-cov** (mais de 50 testes, com as APIs externas simuladas)
 - **Ruff** (lint e formatação)
@@ -207,6 +207,15 @@ flowchart LR
 - **Worker:** o workflow `.github/workflows/worker.yml` roda um ciclo (`--once`) a cada 15 minutos e sai. O `concurrency` impede dois ciclos ao mesmo tempo, e um ciclo que quebra deixa a execução vermelha na aba Actions. Os segredos ficam em *Settings → Secrets and variables → Actions*.
 
 Trocas conscientes: os agendamentos do GitHub podem atrasar alguns minutos, e o GitHub desativa agendamentos de repositórios públicos sem atividade por 60 dias. Para alertas de preço, isso é aceitável; num sistema crítico, o worker rodaria como processo contínuo (`python -m app.worker`).
+
+### Dependências com versões fixas
+
+O `requirements.txt` lista a versão exata de cada pacote, inclusive das dependências das dependências, para que todo build instale o mesmo que passou no CI. Ele é gerado, não editado à mão: as dependências diretas ficam no `requirements.in` (e as de desenvolvimento no `requirements-dev.in`). Para adicionar ou atualizar um pacote, edite o `.in` e rode:
+
+```bash
+docker compose run --rm app python -m scripts.lock_requirements
+docker compose up -d --build
+```
 
 ## Testes
 

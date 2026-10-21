@@ -68,6 +68,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      # Confere que as versões fixadas são compatíveis entre si.
+      - name: Check pinned dependencies
+        run: pip check
+
       - name: Create test database
         run: createdb -h localhost -U crypto crypto_test
         env:
