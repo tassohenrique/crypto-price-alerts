@@ -192,6 +192,22 @@ docker run -d --env-file .env crypto-price-alerts python -m app.worker     # 3. 
 
 O `DATABASE_URL` precisa apontar para um banco que o container alcance (em produção, o banco gerenciado; o `localhost:5433` do `.env` de desenvolvimento não funciona de dentro do container). A API escuta na porta da variável `PORT` (8000 se não for definida). O CI constrói essa imagem a cada push e confere que as migrations rodam e que o `/health` responde.
 
+## Deploy (tudo em planos gratuitos)
+
+```mermaid
+flowchart LR
+    GH[GitHub Actions<br/>a cada 15 min] -- "python -m app.worker --once" --> DB[(Neon<br/>PostgreSQL)]
+    GH --> CG[CoinGecko]
+    GH --> TG[Telegram]
+    R[Render<br/>API FastAPI] --> DB
+```
+
+- **API:** serviço web gratuito no Render, construído a partir do `Dockerfile`. Ao subir, aplica as migrations (`alembic upgrade head`) e depois inicia o FastAPI. No plano gratuito, o serviço hiberna sem acessos e a primeira requisição depois disso demora alguns segundos.
+- **Banco:** PostgreSQL gratuito no Neon. Ele suspende sozinho quando fica sem uso, por isso o ciclo é de 15 minutos: entre um ciclo e outro o banco dorme e o limite mensal de computação não estoura.
+- **Worker:** o workflow `.github/workflows/worker.yml` roda um ciclo (`--once`) a cada 15 minutos e sai. O `concurrency` impede dois ciclos ao mesmo tempo, e um ciclo que quebra deixa a execução vermelha na aba Actions. Os segredos ficam em *Settings → Secrets and variables → Actions*.
+
+Trocas conscientes: os agendamentos do GitHub podem atrasar alguns minutos, e o GitHub desativa agendamentos de repositórios públicos sem atividade por 60 dias. Para alertas de preço, isso é aceitável; num sistema crítico, o worker rodaria como processo contínuo (`python -m app.worker`).
+
 ## Testes
 
 Os testes usam um banco separado. Crie ele uma única vez:

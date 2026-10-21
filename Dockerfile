@@ -1,7 +1,7 @@
 # Imagem de produção. A mesma imagem roda os três processos do projeto:
-#   API (padrão):  fastapi run, porta $PORT (8000 se não definida)
-#   worker:        python -m app.worker
-#   migrations:    alembic upgrade head (precisa rodar antes da API e do worker)
+#   API (padrão):  aplica as migrations e sobe o fastapi na porta $PORT (8000)
+#   worker:        python -m app.worker (loop) ou python -m app.worker --once
+#   migrations:    alembic upgrade head (também pode rodar sozinho)
 FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -34,6 +34,9 @@ EXPOSE 8000
 # HTTP, então seria marcado como "unhealthy". A checagem do /health fica na
 # plataforma de deploy, configurada só para a API.
 
+# A API aplica as migrations antes de subir: o plano gratuito do Render não tem
+# etapa de pre-deploy. Seguro porque roda uma única instância da API; se o
+# alembic falhar, o && impede a API de subir com o banco desatualizado.
 # Forma shell com exec: o ${PORT} é expandido (o Render define essa variável) e o
 # exec faz o fastapi virar o processo 1, recebendo o SIGTERM direto do Docker.
-CMD ["sh", "-c", "exec fastapi run app/main.py --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "alembic upgrade head && exec fastapi run app/main.py --host 0.0.0.0 --port ${PORT:-8000}"]

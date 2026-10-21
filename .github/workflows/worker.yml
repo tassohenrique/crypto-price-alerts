@@ -1,0 +1,68 @@
+name: Worker
+
+# Roda um ciclo do worker a cada 15 minutos. Repositório público: os minutos do
+# GitHub Actions são gratuitos. Atrasos de alguns minutos são normais nos
+# agendamentos do GitHub, aceitáveis para alertas de preço.
+on:
+  schedule:
+    # Minutos quebrados de propósito: no minuto 0 de cada hora a fila do GitHub
+    # fica mais cheia e os atrasos são maiores.
+    - cron: "7,22,37,52 * * * *"
+  # Botão "Run workflow" na aba Actions, para testar sem esperar o horário.
+  workflow_dispatch:
+
+# Nunca dois workers ao mesmo tempo: se uma execução atrasar, a próxima espera
+# na fila em vez de rodar junto (dois ciclos juntos poderiam avisar em dobro).
+concurrency:
+  group: worker
+  cancel-in-progress: false
+
+jobs:
+  run-cycle:
+    name: Run one cycle
+    # Forks não herdam os segredos; o agendamento só faz sentido no original.
+    if: github.repository == 'tassohenrique/crypto-price-alerts'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # Enquanto os segredos não forem cadastrados, a execução termina verde com
+      # um aviso, em vez de falhar (e mandar e-mail de falha) a cada 15 minutos.
+      - name: Check secrets
+        id: secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::Segredos do worker não cadastrados; ciclo pulado."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # Só as dependências de produção, como na imagem.
+      - name: Install dependencies
+        if: steps.secrets.outputs.ready == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Run worker once
+        if: steps.secrets.outputs.ready == 'true'
+        run: python -m app.worker --once
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # O worker não usa a chave da API, mas a configuração exige a variável.
+          # Valor falso: a chave real não precisa existir em mais um lugar.
+          API_KEY: not-used-by-the-worker
