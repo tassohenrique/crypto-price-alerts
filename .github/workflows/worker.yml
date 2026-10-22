@@ -22,7 +22,7 @@ jobs:
     name: Run one cycle
     # Forks não herdam os segredos; o agendamento só faz sentido no original.
     if: github.repository == 'tassohenrique/crypto-price-alerts'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
@@ -66,3 +66,4 @@ jobs:
           # O worker não usa a chave da API, mas a configuração exige a variável.
           # Valor falso: a chave real não precisa existir em mais um lugar.
           API_KEY: not-used-by-the-worker
+          LOG_FORMAT: json

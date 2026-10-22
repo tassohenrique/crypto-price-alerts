@@ -2,7 +2,7 @@ import argparse
 import logging
 import signal
 import threading
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.clients.coingecko import (
 )
 from app.clients.telegram import TelegramClient, TelegramError, create_telegram_client
 from app.core.config import settings
+from app.core.log_format import make_formatter
 from app.db.session import SessionLocal
 from app.models import PriceSnapshot
 from app.repositories.alert import AlertRepository
@@ -115,15 +116,16 @@ def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> bool:
         result.alerts_triggered,
         result.notifications_sent,
         result.notifications_failed,
+        # No formato JSON, cada número vira um campo próprio, fácil de filtrar.
+        extra=asdict(result),
     )
     return True
 
 
-def configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+def configure_logging(log_format: str | None = None) -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(make_formatter(log_format or settings.log_format))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
     # O httpx registra a URL de cada requisição em nível INFO, e a URL do
     # Telegram contém o token do bot. Do httpx, só avisos e erros vão para o log.
     logging.getLogger("httpx").setLevel(logging.WARNING)

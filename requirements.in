@@ -1,0 +1,10 @@
+# Dependências diretas da aplicação, com a versão mínima aceita.
+# Não instale a partir daqui: o requirements.txt é gerado deste arquivo com as
+# versões exatas de tudo. Para atualizar, edite aqui e rode:
+#   docker compose run --rm app python -m scripts.lock_requirements
+fastapi[standard]>=0.141
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+pydantic-settings>=2.0
+alembic>=1.13
+httpx>=0.27

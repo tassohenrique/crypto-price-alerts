@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+# Sistema fixo (e não ubuntu-latest): uma troca de versão do Ubuntu pelo GitHub
+# não pode quebrar o CI de surpresa. Atualizar é uma decisão, em commit próprio.
+# Sistema fixo (e não ubuntu-latest): uma troca de versão do Ubuntu pelo GitHub
+# não pode quebrar o CI de surpresa. Atualizar é uma decisão, em commit próprio.
 jobs:
   lint:
     name: Lint (Ruff)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +33,7 @@ jobs:
 
   test:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -68,6 +72,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      # Confere que as versões fixadas são compatíveis entre si.
+      - name: Check pinned dependencies
+        run: pip check
+
       - name: Create test database
         run: createdb -h localhost -U crypto crypto_test
         env:
@@ -81,7 +89,7 @@ jobs:
 
   docker:
     name: Production image (smoke test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
