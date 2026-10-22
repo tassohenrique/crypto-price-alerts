@@ -2,9 +2,12 @@ import argparse
 import logging
 import signal
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from app.clients.coingecko import (
@@ -24,6 +27,9 @@ from app.services.alert import AlertService
 from app.services.notification import build_alert_message
 
 logger = logging.getLogger(__name__)
+
+# Número qualquer, fixo, que identifica a trava do ciclo no PostgreSQL.
+CYCLE_LOCK_ID = 7_301_026
 
 
 @dataclass
@@ -94,6 +100,41 @@ def send_pending_notifications(
         result.notifications_sent += 1
 
 
+@contextmanager
+def cycle_lock(engine: Engine) -> Iterator[bool]:
+    """Trava no PostgreSQL que garante um único ciclo por vez, em qualquer processo.
+
+    Entrega True se conseguiu a trava e False se outro ciclo já está rodando.
+    Usa uma conexão própria: a Session devolve a conexão ao pool a cada commit,
+    e a trava precisa ser liberada na mesma conexão em que foi obtida.
+    """
+    with engine.connect() as connection:
+        acquired = connection.execute(
+            text("SELECT pg_try_advisory_lock(:id)"), {"id": CYCLE_LOCK_ID}
+        ).scalar_one()
+        # A trava é da conexão, não da transação: fecha a transação para a
+        # conexão não ficar "idle in transaction" durante o ciclo inteiro.
+        connection.commit()
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(:id)"), {"id": CYCLE_LOCK_ID}
+                )
+
+
+def run_locked_cycle(
+    db: Session, coingecko: CoinGeckoClient, telegram: TelegramClient
+) -> CycleResult | None:
+    """Roda o ciclo se nenhum outro estiver rodando; None se foi pulado."""
+    with cycle_lock(db.get_bind()) as acquired:
+        if not acquired:
+            logger.info("Outro ciclo já está em andamento; este foi pulado.")
+            return None
+        return run_cycle(db, coingecko, telegram)
+
+
 def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> bool:
     """Roda um ciclo numa sessão própria. Nenhum erro escapa daqui.
 
@@ -103,11 +144,15 @@ def run_once(coingecko: CoinGeckoClient, telegram: TelegramClient) -> bool:
     """
     with SessionLocal() as db:
         try:
-            result = run_cycle(db, coingecko, telegram)
+            result = run_locked_cycle(db, coingecko, telegram)
         except Exception:
             db.rollback()
             logger.exception("Erro inesperado no ciclo; o worker continua no próximo.")
             return False
+
+    if result is None:
+        # Pular porque outro ciclo está rodando não é erro.
+        return True
 
     logger.info(
         "Ciclo concluído: %d preços, %d alertas disparados, %d avisos enviados, "

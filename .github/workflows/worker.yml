@@ -1,14 +1,10 @@
 name: Worker
 
-# Roda um ciclo do worker a cada 15 minutos. Repositório público: os minutos do
-# GitHub Actions são gratuitos. Atrasos de alguns minutos são normais nos
-# agendamentos do GitHub, aceitáveis para alertas de preço.
+# Roda um ciclo do worker sob demanda (botão "Run workflow" na aba Actions).
+# O agendamento a cada 15 min saiu daqui: num teste de ~20 h, o GitHub rodou só
+# 4 das ~80 execuções previstas, com intervalos de 3 a 6 h. Quem agenda agora é
+# o cron-job.org, chamando POST /internal/run-cycle na API.
 on:
-  schedule:
-    # Minutos quebrados de propósito: no minuto 0 de cada hora a fila do GitHub
-    # fica mais cheia e os atrasos são maiores.
-    - cron: "7,22,37,52 * * * *"
-  # Botão "Run workflow" na aba Actions, para testar sem esperar o horário.
   workflow_dispatch:
 
 # Nunca dois workers ao mesmo tempo: se uma execução atrasar, a próxima espera
