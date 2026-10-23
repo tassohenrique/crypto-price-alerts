@@ -87,6 +87,7 @@ Todas as rotas de `/alerts` exigem o cabeçalho `X-API-Key` com o valor de `API_
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/health` | Verifica se a API e o banco estão no ar |
+| GET | `/health/worker` | Verifica se o worker está gravando preços em dia: `503` se o preço mais recente tiver mais de 30 min |
 | GET | `/alerts` | Lista os alertas, do mais recente para o mais antigo |
 | GET | `/alerts?active=true` | Só os ativos (`false` para os já disparados) |
 | GET | `/alerts/{id}` | Busca um alerta |
@@ -209,6 +210,8 @@ flowchart LR
 - **Worker:** o [cron-job.org](https://cron-job.org) (gratuito) chama `POST /internal/run-cycle` a cada 15 minutos, com o cabeçalho `X-Cron-Secret`. A rota roda um ciclo e responde com o resumo (`prices_saved`, `alerts_triggered`...). As chamadas também mantêm a API acordada no Render.
 - **Um ciclo por vez:** o ciclo pega uma trava no PostgreSQL (`pg_try_advisory_lock`) antes de começar. Se outro ciclo estiver rodando, em qualquer processo, a rota responde `409` e não faz nada, então nenhum aviso sai em dobro.
 - **Segredo separado:** `CRON_SECRET` só dispara ciclos; a `API_KEY`, que gerencia os alertas, nunca sai do Render. Sem `CRON_SECRET`, a rota fica desligada (`404`).
+
+- **Alarme se o worker parar:** `GET /health/worker` responde `503` quando o preço mais recente passa de 30 minutos (`WORKER_STALE_AFTER_MINUTES`). Um preço novo só aparece se tudo funcionou de ponta a ponta (agendador, CoinGecko e banco), então esse é o sinal. Um monitor gratuito, como o [UptimeRobot](https://uptimerobot.com), apontado para essa rota avisa por e-mail se algo parar.
 
 Por que não o agendamento do GitHub Actions: num teste de ~20 horas, ele rodou só 4 das ~80 execuções previstas, com intervalos de 3 a 6 horas. O workflow `worker.yml` continua disponível para rodar um ciclo manualmente.
 
