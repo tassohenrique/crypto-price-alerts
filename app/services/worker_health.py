@@ -29,12 +29,11 @@ def check_worker_health(
     agendador chamou, a CoinGecko respondeu e o banco gravou. Por isso ele é o
     sinal: se qualquer peça parar, o preço mais recente envelhece.
     """
+    limit = timedelta(minutes=stale_after_minutes)
     if not has_coins:
         # Nenhuma moeda cadastrada: o worker não tem o que buscar, e tudo bem.
         status = "idle"
-    elif last_price_at is None:
-        status = "stale"
-    elif now - last_price_at > timedelta(minutes=stale_after_minutes):
+    elif last_price_at is None or now - last_price_at > limit:
         status = "stale"
     else:
         status = "ok"

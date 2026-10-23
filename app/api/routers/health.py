@@ -59,9 +59,7 @@ def worker_health(db: DbDep) -> JSONResponse:
         raise database_unavailable() from None
 
     status_code = (
-        status.HTTP_200_OK
-        if health.is_healthy
-        else status.HTTP_503_SERVICE_UNAVAILABLE
+        status.HTTP_200_OK if health.is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
     )
     content = jsonable_encoder(asdict(health))
     return JSONResponse(status_code=status_code, content=content)
