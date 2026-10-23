@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     telegram_chat_id: str
     poll_interval_seconds: int = 300
+    # Sem preço novo há mais que isso, GET /health/worker responde 503.
+    # O dobro do ciclo de 15 min: tolera um ciclo perdido sem alarme falso.
+    worker_stale_after_minutes: int = 30
     # "text" para ler no terminal; "json" em produção, para filtrar por campo.
     log_format: Literal["text", "json"] = "text"
     api_key: str

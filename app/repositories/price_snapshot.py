@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import PriceSnapshot
@@ -15,6 +15,10 @@ class PriceSnapshotRepository:
         """Grava os preços de uma busca inteira de uma vez."""
         self.db.add_all(snapshots)
         self.db.flush()
+
+    def latest_fetched_at(self) -> datetime | None:
+        """Quando foi gravado o preço mais recente, de qualquer moeda."""
+        return self.db.scalar(select(func.max(PriceSnapshot.fetched_at)))
 
     def list_for_coin(
         self,
