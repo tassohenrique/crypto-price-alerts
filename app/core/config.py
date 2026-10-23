@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # "text" para ler no terminal; "json" em produção, para filtrar por campo.
     log_format: Literal["text", "json"] = "text"
     api_key: str
+    # Segredo só do agendador externo (ex.: cron-job.org) para POST
+    # /internal/run-cycle. Separado da API_KEY: se vazar, só dispara ciclos.
+    # Sem valor, a rota fica desligada.
+    cron_secret: str | None = None
 
 
 settings = Settings()

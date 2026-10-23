@@ -141,6 +141,7 @@ No `.env`, troque a senha do banco (nas três variáveis em que ela aparece) e p
 | `API_KEY` | Qualquer valor secreto, por exemplo `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `POLL_INTERVAL_SECONDS` | Opcional. Intervalo entre os ciclos do worker; o padrão é 300 |
 | `LOG_FORMAT` | Opcional. `text` (padrão, para ler no terminal) ou `json` (uma linha JSON por log, usado em produção) |
+| `CRON_SECRET` | Opcional. Segredo do agendador externo para `POST /internal/run-cycle`; sem ele, a rota fica desligada |
 
 **2. Suba os serviços e crie as tabelas**
 
@@ -197,17 +198,19 @@ O `DATABASE_URL` precisa apontar para um banco que o container alcance (em produ
 
 ```mermaid
 flowchart LR
-    GH[GitHub Actions<br/>a cada 15 min] -- "python -m app.worker --once" --> DB[(Neon<br/>PostgreSQL)]
-    GH --> CG[CoinGecko]
-    GH --> TG[Telegram]
-    R[Render<br/>API FastAPI] --> DB
+    CJ[cron-job.org<br/>a cada 15 min] -- "POST /internal/run-cycle<br/>X-Cron-Secret" --> R[Render<br/>API FastAPI]
+    R --> DB[(Neon<br/>PostgreSQL)]
+    R --> CG[CoinGecko]
+    R --> TG[Telegram]
 ```
 
 - **API:** serviço web gratuito no Render, construído a partir do `Dockerfile`. Ao subir, aplica as migrations (`alembic upgrade head`) e depois inicia o FastAPI. No plano gratuito, o serviço hiberna sem acessos e a primeira requisição depois disso demora alguns segundos.
 - **Banco:** PostgreSQL gratuito no Neon. Ele suspende sozinho quando fica sem uso, por isso o ciclo é de 15 minutos: entre um ciclo e outro o banco dorme e o limite mensal de computação não estoura.
-- **Worker:** o workflow `.github/workflows/worker.yml` roda um ciclo (`--once`) a cada 15 minutos e sai. O `concurrency` impede dois ciclos ao mesmo tempo, e um ciclo que quebra deixa a execução vermelha na aba Actions. Os segredos ficam em *Settings → Secrets and variables → Actions*.
+- **Worker:** o [cron-job.org](https://cron-job.org) (gratuito) chama `POST /internal/run-cycle` a cada 15 minutos, com o cabeçalho `X-Cron-Secret`. A rota roda um ciclo e responde com o resumo (`prices_saved`, `alerts_triggered`...). As chamadas também mantêm a API acordada no Render.
+- **Um ciclo por vez:** o ciclo pega uma trava no PostgreSQL (`pg_try_advisory_lock`) antes de começar. Se outro ciclo estiver rodando, em qualquer processo, a rota responde `409` e não faz nada, então nenhum aviso sai em dobro.
+- **Segredo separado:** `CRON_SECRET` só dispara ciclos; a `API_KEY`, que gerencia os alertas, nunca sai do Render. Sem `CRON_SECRET`, a rota fica desligada (`404`).
 
-Trocas conscientes: os agendamentos do GitHub podem atrasar alguns minutos, e o GitHub desativa agendamentos de repositórios públicos sem atividade por 60 dias. Para alertas de preço, isso é aceitável; num sistema crítico, o worker rodaria como processo contínuo (`python -m app.worker`).
+Por que não o agendamento do GitHub Actions: num teste de ~20 horas, ele rodou só 4 das ~80 execuções previstas, com intervalos de 3 a 6 horas. O workflow `worker.yml` continua disponível para rodar um ciclo manualmente.
 
 ### Dependências com versões fixas
 
