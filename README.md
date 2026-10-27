@@ -16,26 +16,28 @@ Seu alerta: acima de R$ 600.000,00.
 
 ## Funcionalidades
 
-- **Monitoramento contínuo:** um worker busca os preços em reais de todas as moedas cadastradas numa única chamada à CoinGecko, a cada 5 minutos (configurável)
-- **Histórico de preços:** cada busca grava um registro por moeda, indexado por moeda e data
+- **Monitoramento contínuo:** um worker busca os preços em reais de todas as moedas cadastradas numa única chamada à CoinGecko, em intervalos regulares (5 minutos no ambiente local, 15 em produção)
+- **Cadastro de moedas pela API:** basta o id da CoinGecko; o símbolo e o nome vêm da própria CoinGecko, que também confirma que a moeda existe
+- **Histórico de preços:** cada busca grava um registro por moeda, indexado por moeda e data, e a API consulta o histórico por período
 - **Alertas de alta e de baixa:** dispara quando o preço sobe até o alvo ou acima (`above`), ou cai até o alvo ou abaixo (`below`)
 - **Avisos no Telegram** com os valores formatados em reais; moedas abaixo de R$ 1 mantêm até 8 casas decimais
 - **Entrega garantida:** se o Telegram falhar, o aviso fica pendente e é reenviado no ciclo seguinte
 - **Rearme:** um alerta que já disparou pode ser reativado pela API
-- **API protegida por chave** (`X-API-Key`) para listar, criar, rearmar e apagar alertas
+- **API protegida por chave** (`X-API-Key`) para gerenciar moedas e alertas
+- **Alarme de worker parado:** uma rota de saúde responde `503` se os preços pararem de chegar
 
 ## Tecnologias
 
 - **Python 3.14** e **FastAPI**
 - **PostgreSQL 17**, **SQLAlchemy 2.1** e **Alembic** (migrations)
 - **httpx** (clientes da CoinGecko e do Telegram) e **Pydantic Settings** (configuração)
-- **pytest** e **pytest-cov** (mais de 50 testes, com as APIs externas simuladas)
+- **pytest** e **pytest-cov** (mais de 100 testes, com as APIs externas simuladas)
 - **Ruff** (lint e formatação)
 - **Docker** e **Docker Compose**
 
 ## Como funciona
 
-O projeto tem dois processos que compartilham o mesmo banco: a **API**, que gerencia os alertas, e o **worker**, que roda em loop. Cada ciclo do worker:
+O projeto tem dois processos que compartilham o mesmo banco: a **API**, que gerencia os alertas, e o **worker**, que busca os preços e envia os avisos. No ambiente local o worker roda em loop; em produção, um agendador externo dispara um ciclo de cada vez (veja [Deploy](#deploy-tudo-em-planos-gratuitos)). Cada ciclo:
 
 ```mermaid
 flowchart LR
@@ -82,20 +84,24 @@ erDiagram
 
 ## Rotas
 
-Todas as rotas de `/alerts` exigem o cabeçalho `X-API-Key` com o valor de `API_KEY` do `.env`.
+As rotas de `/coins` e `/alerts` exigem o cabeçalho `X-API-Key` com o valor de `API_KEY` do `.env`.
 
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/health` | Verifica se a API e o banco estão no ar |
 | GET | `/health/worker` | Verifica se o worker está gravando preços em dia: `503` se o preço mais recente tiver mais de 30 min |
+| GET | `/coins` | Lista as moedas acompanhadas, em ordem alfabética |
+| POST | `/coins` | Cadastra uma moeda pelo id da CoinGecko (`422` se o id não existir lá, `502` se a CoinGecko falhar) |
+| GET | `/coins/{id}/prices` | Histórico de preços, do mais recente para o mais antigo. Filtros `start` (inclusivo) e `end` (exclusivo), em UTC, e `limit` (1 a 1000, padrão 100) |
 | GET | `/alerts` | Lista os alertas, do mais recente para o mais antigo |
 | GET | `/alerts?active=true` | Só os ativos (`false` para os já disparados) |
 | GET | `/alerts/{id}` | Busca um alerta |
 | POST | `/alerts` | Cria um alerta |
 | POST | `/alerts/{id}/rearm` | Reativa um alerta que já disparou e já teve o aviso enviado |
 | DELETE | `/alerts/{id}` | Apaga um alerta |
+| POST | `/internal/run-cycle` | Roda um ciclo do worker. Só para o agendador: exige `X-Cron-Secret` e fica fora do `/docs` |
 
-Exemplo de criação:
+Exemplo de criação de alerta:
 
 ```bash
 curl -X POST http://localhost:8001/alerts \
@@ -116,7 +122,7 @@ Envie o `target_price` como texto para não perder precisão. A documentação i
 
 **Worker resiliente.** Uma falha na CoinGecko (incluindo o limite de requisições, HTTP 429) pula só a busca de preços daquele ciclo; os avisos pendentes continuam sendo enviados. Qualquer erro inesperado faz rollback e o worker segue para o próximo ciclo. Ao receber `SIGTERM` ou `SIGINT`, ele termina o ciclo atual e encerra sem cortar nada pela metade.
 
-**Arquitetura em camadas.** Routers (HTTP), services (regras de negócio) e repositories (acesso ao banco). Os services não conhecem HTTP: lançam exceções da aplicação, que um único handler converte em 401, 404 ou 409. A mesma regra de disparo é usada pelo worker e coberta pelos testes, inclusive o caso do preço exatamente igual ao alvo, que dispara.
+**Arquitetura em camadas.** Routers (HTTP), services (regras de negócio) e repositories (acesso ao banco). Os services não conhecem HTTP: lançam exceções da aplicação, que um único handler converte em 401, 404, 409, 422 ou 502. A mesma regra de disparo é usada pelo worker e coberta pelos testes, inclusive o caso do preço exatamente igual ao alvo, que dispara.
 
 **Regras protegidas também no banco.** Preço-alvo e preços do histórico positivos são garantidos por constraints no PostgreSQL, além da validação na API. A chave de API é comparada em tempo constante (`secrets.compare_digest`).
 
@@ -155,12 +161,16 @@ A API sobe em http://localhost:8001 e o banco fica exposto na porta 5433.
 
 **3. Cadastre as moedas que quer acompanhar**
 
-O primeiro argumento é o id da moeda na CoinGecko, o mesmo que aparece na URL da moeda no site:
+Use o id da moeda na CoinGecko, o mesmo que aparece na URL da moeda no site. O símbolo e o nome são buscados na própria CoinGecko:
 
 ```bash
-docker compose exec app python -m scripts.add_coin bitcoin BTC Bitcoin
-docker compose exec app python -m scripts.add_coin ethereum ETH Ethereum
+curl -X POST http://localhost:8001/coins \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"coingecko_id": "bitcoin"}'
 ```
+
+Ou pelo [`/docs`](http://localhost:8001/docs), depois de clicar em **Authorize** e informar a chave.
 
 Depois disso, crie alertas pela API. Para acompanhar o worker:
 
