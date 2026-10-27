@@ -108,6 +108,8 @@ Envie o `target_price` como texto para não perder precisão. A documentação i
 
 ## Decisões técnicas
 
+Um resumo abaixo. O contexto completo de cada decisão, com as alternativas descartadas, fica nos [registros de decisão de arquitetura](docs/adr/README.md).
+
 **Dinheiro sem `float`.** Preços são `Decimal` do começo ao fim: a resposta da CoinGecko é lida com `parse_float=Decimal` e pedida com `precision=full`, e o banco usa `NUMERIC(30, 12)`, suficiente para moedas que valem frações de centavo.
 
 **Aviso pendente em vez de envio imediato.** O worker primeiro confirma no banco quais alertas dispararam e só depois envia as mensagens, cada uma com o seu commit. Se o Telegram estiver fora do ar ou o worker cair no meio do ciclo, nenhum aviso se perde: ele continua pendente e sai no próximo ciclo.
