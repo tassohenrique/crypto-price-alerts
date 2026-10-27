@@ -1,0 +1,21 @@
+# Dependabot abre um PR quando sai versão nova de uma action usada nos workflows
+# (actions/checkout, actions/setup-python). O CI roda em cada PR, então a
+# atualização só entra se tudo continuar verde.
+#
+# As dependências Python ficam de fora de propósito: o requirements.txt é gerado
+# pelo scripts/lock_requirements.py a partir do requirements.in. O Dependabot
+# editaria o arquivo gerado direto, e a próxima geração desfaria a mudança.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Sao_Paulo
+    # Um único PR por semana com todas as actions, em vez de um por action.
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
